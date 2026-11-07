@@ -3,6 +3,7 @@ import * as Comlink from 'comlink';
 import { setJpegDpi } from '@/domain/jpeg';
 import { mmToPx, mmToPxRound } from '@/domain/units';
 import { adjustmentsToMatrix, applyMatrix, isIdentity } from './colorMatrix';
+import { drawBase, drawPattern, drawTexts } from './sheetBackground';
 import type { CalibrationSheetRequest, PhotoRenderRequest, SheetRenderRequest } from './types';
 
 // 元画像のデコード結果を Worker ごとにキャッシュ（同じ写真を何度も描画するため）
@@ -105,14 +106,35 @@ const api = {
     const H = mmToPxRound(req.heightMm, req.dpi);
     const canvas = new OffscreenCanvas(W, H);
     const c = ctx2d(canvas);
-    c.fillStyle = '#ffffff';
-    c.fillRect(0, 0, W, H);
+    const deco = req.decoration;
+    drawBase(c, deco, W, H);
 
     const { calibration: cal } = req;
     const sx = cal.scaleXPct / 100;
     const sy = cal.scaleYPct / 100;
     const cx = req.widthMm / 2;
     const cy = req.heightMm / 2;
+    const k = req.dpi / 25.4;
+
+    // 柄と文字は mm 座標で描き、印刷ズレ補正も同じ変換で反映する
+    c.save();
+    c.setTransform(
+      sx * k,
+      0,
+      0,
+      sy * k,
+      (cx - cx * sx + cal.offsetXMm) * k,
+      (cy - cy * sy + cal.offsetYMm) * k,
+    );
+    drawPattern(c, deco, req.widthMm, req.heightMm);
+    if (deco.photoMat && deco.pattern !== 'none') {
+      // 写真の周囲を白く抜いて、柄の上でも切りやすく・見やすくする
+      const m = Math.max(0.8, req.gapMm / 2);
+      c.fillStyle = '#ffffff';
+      for (const p of req.placements) c.fillRect(p.xMm - m, p.yMm - m, p.widthMm + m * 2, p.heightMm + m * 2);
+    }
+    drawTexts(c, deco);
+    c.restore();
     // 用紙中心を基準に拡大縮小し、オフセットを加える（プリンターのズレ補正）
     const mapX = (mm: number) => mmToPx(cx + (mm - cx) * sx + cal.offsetXMm, req.dpi);
     const mapY = (mm: number) => mmToPx(cy + (mm - cy) * sy + cal.offsetYMm, req.dpi);
