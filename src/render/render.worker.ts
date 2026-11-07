@@ -3,6 +3,7 @@ import * as Comlink from 'comlink';
 import { setJpegDpi } from '@/domain/jpeg';
 import { mmToPx, mmToPxRound } from '@/domain/units';
 import { adjustmentsToMatrix, applyMatrix, isIdentity } from './colorMatrix';
+import { buildMaskCanvas, type MaskInput, type MaskParams } from './mask';
 import { drawBase, drawPattern, drawTexts } from './sheetBackground';
 import type { CalibrationSheetRequest, PhotoRenderRequest, SheetRenderRequest } from './types';
 
@@ -23,6 +24,22 @@ function decode(key: string, blob: Blob): Promise<ImageBitmap> {
     decoded.set(key, p);
   }
   return p;
+}
+
+// 元画像サイズ（最大1600px）の境界調整済みマスクをキャッシュ
+const masks = new Map<string, OffscreenCanvas>();
+const MASK_MAX = 1600;
+
+function maskFor(key: string, m: MaskInput, p: MaskParams, imgW: number, imgH: number): OffscreenCanvas {
+  const id = `${key}:${p.threshold}:${p.softness}`;
+  let c = masks.get(id);
+  if (!c) {
+    const k = Math.min(1, MASK_MAX / Math.max(imgW, imgH));
+    c = buildMaskCanvas(m, p, Math.round(imgW * k), Math.round(imgH * k));
+    if (masks.size > 3) masks.clear();
+    masks.set(id, c);
+  }
+  return c;
 }
 
 function ctx2d(canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2D {
@@ -54,6 +71,13 @@ async function drawPhoto(req: PhotoRenderRequest): Promise<OffscreenCanvas> {
   c.rotate((crop.rotation * Math.PI) / 180);
   c.scale(crop.flipH ? -1 : 1, 1);
   c.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  if (req.mask) {
+    // 人物だけを残す（同じ変換でマスクを重ねる）
+    const mc = maskFor(req.mask.key, req.mask.data, req.mask.params, img.width, img.height);
+    c.globalCompositeOperation = 'destination-in';
+    c.drawImage(mc, -drawW / 2, -drawH / 2, drawW, drawH);
+    c.globalCompositeOperation = 'source-over';
+  }
   c.restore();
 
   // 色調整は写真部分のみに適用し、背景色は変えない
@@ -72,6 +96,13 @@ async function drawPhoto(req: PhotoRenderRequest): Promise<OffscreenCanvas> {
 const MAX_SOURCE_PX = 4096;
 
 const api = {
+  /** プレビュー用のマスク画像（PNG、CSS の mask-image に使う） */
+  async maskPreview(m: MaskInput, p: MaskParams, imgW: number, imgH: number): Promise<Blob> {
+    const k = Math.min(1, 900 / Math.max(imgW, imgH));
+    const c = buildMaskCanvas(m, p, Math.round(imgW * k), Math.round(imgH * k));
+    return c.convertToBlob({ type: 'image/png' });
+  },
+
   /** 読み込んだ画像の向きを正規化し、大きすぎる場合は縮小する（デコードも裏側で行う） */
   async normalizeImage(blob: Blob): Promise<{ blob: Blob; width: number; height: number }> {
     const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });

@@ -20,6 +20,10 @@ export interface SettingsState {
   customSpecs: PhotoSpec[];
   showGuides: boolean;
   sheetDesign: SheetDesign;
+  /** 写真の読み込み時に顔に合わせて自動で位置合わせする */
+  autoFit: boolean;
+  /** AI の推論に GPU を使う */
+  useGpu: boolean;
 }
 
 export const DEFAULT_CALIBRATION: Calibration = {
@@ -42,6 +46,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   customSpecs: [],
   showGuides: true,
   sheetDesign: DEFAULT_SHEET_DESIGN,
+  autoFit: true,
+  useGpu: true,
 };
 
 interface SettingsActions {

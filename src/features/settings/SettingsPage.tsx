@@ -5,6 +5,7 @@ import {
   Palette,
   RotateCcw,
   Ruler,
+  ScanFace,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -106,6 +107,42 @@ export function SettingsPage() {
               onChange={(e) => s.set({ showGuides: e.target.checked })}
             />
           </label>
+        </Section>
+
+        <Section
+          id="ai"
+          title="自動処理（AI）"
+          icon={<ScanFace size={18} />}
+          summary="顔に合わせた位置合わせ・背景の置き換え"
+        >
+          <label className="switch-row">
+            <span>
+              写真の読み込み時に、顔に合わせて自動で位置合わせ
+              <span className="hint">頭の大きさ・位置・傾きを規格の目安に合わせます</span>
+            </span>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={s.autoFit}
+              onChange={(e) => s.set({ autoFit: e.target.checked })}
+            />
+          </label>
+          <label className="switch-row">
+            <span>
+              GPU を使って高速に処理
+              <span className="hint">うまく動かない場合はオフにしてください（次の解析から反映）</span>
+            </span>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={s.useGpu}
+              onChange={(e) => s.set({ useGpu: e.target.checked })}
+            />
+          </label>
+          <p className="hint">
+            AI の処理は端末内で行われ、写真が外部に送信されることはありません。初回のみ AI
+            モデル（約4MB）をダウンロードし、以降はキャッシュから読み込みます。
+          </p>
         </Section>
 
         <Section

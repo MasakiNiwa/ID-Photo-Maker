@@ -8,6 +8,7 @@ import {
   Loader2,
   RotateCcw,
   RotateCw,
+  ScanFace,
   Share2,
   Trash2,
 } from 'lucide-react';
@@ -20,13 +21,14 @@ import { formatSize, type PhotoSpec, PRESET_SPECS } from '@/domain/specs';
 import { canShareFiles, downloadBlob, safeFilename, shareBlob } from '@/lib/download';
 import { useObjectUrl } from '@/lib/useObjectUrl';
 import { renderPhotoJpeg } from '@/render/pool';
-import { useProject } from '@/stores/project';
+import { maskRequest, useProject } from '@/stores/project';
 import { useSettings } from '@/stores/settings';
 import { findSpec, useAllSpecs } from '@/stores/specs';
 import { ColorFilterDefs } from './ColorFilter';
 import { Cropper, SCALE_MAX, SCALE_MIN } from './Cropper';
 import { ImageDropzone, useFilePicker, useImagePaste } from './ImageInput';
 import { SpecPicker } from './SpecPicker';
+import { useMaskUrl } from './useMaskUrl';
 import './editor.css';
 
 type Tab = 'spec' | 'position' | 'color' | 'export';
@@ -47,6 +49,8 @@ export function EditorPage() {
   const [tab, setTab] = useState<Tab>('spec');
   const [confirmClear, setConfirmClear] = useState(false);
   const imageUrl = useObjectUrl(p.imageBlob);
+  const maskUrl = useMaskUrl();
+  const ai = p.analysis.status;
 
   const spec: PhotoSpec = findSpec(specs, p.activeSpecId) ?? (PRESET_SPECS[0] as PhotoSpec);
   const crop = p.crops[spec.id];
@@ -96,6 +100,7 @@ export function EditorPage() {
         adjustments: p.adjustments,
         background: p.background,
         dpi: settings.dpi,
+        mask: maskRequest(p),
       },
       settings.jpegQuality,
     );
@@ -175,8 +180,23 @@ export function EditorPage() {
           crop={crop}
           background={p.background}
           showGuides={settings.showGuides}
+          maskUrl={maskUrl}
           onChange={updateCrop}
         />
+        {ai !== 'done' && ai !== 'idle' && (
+          <p className={`ai-status ai-${ai}`} role="status">
+            {ai === 'running' && '顔を検出しています…（初回はAIモデルの読み込みに少し時間がかかります）'}
+            {ai === 'noface' && '顔が見つかりませんでした。手動で位置を合わせてください。'}
+            {ai === 'error' && (
+              <>
+                顔の検出に失敗しました。
+                <button type="button" className="link-btn" onClick={() => void p.analyze()}>
+                  再試行
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <div className="editor-quick" role="toolbar" aria-label="写真の操作">
           <button
             type="button"
@@ -216,8 +236,17 @@ export function EditorPage() {
           >
             {settings.showGuides ? <Eye size={20} /> : <EyeOff size={20} />}
           </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={ai !== 'done'}
+            onClick={() => p.fitToFace(spec) && toast('顔に合わせて位置を調整しました')}
+            title="顔を検出して、規格に合わせた大きさ・位置・傾きに自動調整します"
+          >
+            {ai === 'running' ? <Loader2 size={16} className="spin" /> : <ScanFace size={16} />} 顔に合わせる
+          </button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => p.resetCrop(spec)}>
-            位置をリセット
+            リセット
           </button>
         </div>
       </div>
@@ -265,8 +294,49 @@ export function EditorPage() {
 
           {tab === 'color' && (
             <div className="stack">
+              <label className="switch-row">
+                <span>
+                  背景を置き換える
+                  <span className="hint">AI で人物を切り抜き、背景を下の色に置き換えます</span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={p.bgRemoval.enabled}
+                  disabled={!p.mask}
+                  onChange={(e) => p.setBgRemoval({ enabled: e.target.checked })}
+                />
+              </label>
+              {!p.mask && ai === 'running' && <p className="hint">人物を解析しています…</p>}
+              {!p.mask && (ai === 'error' || ai === 'noface') && (
+                <p className="hint">この写真では人物を切り抜けませんでした。</p>
+              )}
+              {p.bgRemoval.enabled && (
+                <>
+                  <Slider
+                    label="境界の位置（右へ動かすと人物が小さく）"
+                    value={p.bgRemoval.threshold}
+                    min={0.2}
+                    max={0.8}
+                    step={0.01}
+                    onChange={(v) => p.setBgRemoval({ threshold: v })}
+                    format={(v) => `${Math.round(v * 100)}`}
+                  />
+                  <Slider
+                    label="境界のなめらかさ"
+                    value={p.bgRemoval.softness}
+                    min={0.02}
+                    max={0.3}
+                    step={0.01}
+                    onChange={(v) => p.setBgRemoval({ softness: v })}
+                    format={(v) => `${Math.round(v * 100)}`}
+                  />
+                </>
+              )}
               <div className="field">
-                <span className="field-label">背景色（写真の外側の余白）</span>
+                <span className="field-label">
+                  {p.bgRemoval.enabled ? '背景色' : '背景色（写真の外側の余白）'}
+                </span>
                 <div className="swatches">
                   {BACKGROUND_COLORS.map((c) => (
                     <button
@@ -289,7 +359,6 @@ export function EditorPage() {
                     />
                   </label>
                 </div>
-                <p className="hint">背景の自動置き換え（背景除去）は今後のバージョンで対応予定です。</p>
               </div>
               <Slider
                 label="明るさ"

@@ -1,5 +1,6 @@
 import type { Adjustments, CropState } from '@/domain/edit';
 import type { Placement } from '@/domain/layout';
+import type { MaskInput, MaskParams } from './mask';
 import type { SheetDecoration } from './sheetBackground';
 
 export interface PhotoRenderRequest {
@@ -13,6 +14,8 @@ export interface PhotoRenderRequest {
   adjustments: Adjustments;
   background: string;
   dpi: number;
+  /** 背景の置き換え（人物マスク）。無ければ元画像の背景のまま */
+  mask?: { data: MaskInput; params: MaskParams; key: string };
 }
 
 export interface Calibration {

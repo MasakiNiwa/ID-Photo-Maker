@@ -6,3 +6,4 @@ dev-dist
 coverage
 src/generated/
 public/THIRD_PARTY_LICENSES.txt
+public/mediapipe/
