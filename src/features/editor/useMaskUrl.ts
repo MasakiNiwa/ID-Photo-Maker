@@ -19,7 +19,7 @@ export function usePreviewLayers(): { display: DisplayImage | null; maskUrl: str
   const image = useProject((s) => s.image);
   const blob = useProject((s) => s.imageBlob);
   const mask = useProject((s) => s.mask);
-  const { enabled, threshold, softness } = useProject((s) => s.bgRemoval);
+  const { enabled, threshold, softness, refine } = useProject((s) => s.bgRemoval);
   const extend = useSettings((s) => s.extendEdges);
   const originalUrl = useObjectUrl(blob);
 
@@ -42,13 +42,13 @@ export function usePreviewLayers(): { display: DisplayImage | null; maskUrl: str
   const useExt = extend && !!extUrl && !!ext;
   const [maskBlob, setMaskBlob] = useState<Blob | null>(null);
   useEffect(() => {
-    if (!enabled || !mask || !image) {
+    if (!enabled || !mask || !image || !blob) {
       setMaskBlob(null);
       return;
     }
     let cancelled = false;
     const t = setTimeout(() => {
-      maskPreview(mask, { threshold, softness }, image.width, image.height, useExt)
+      maskPreview(blob, image.id, mask, { threshold, softness }, useExt, refine)
         .then((r) => {
           if (!cancelled) setMaskBlob(r.blob);
         })
@@ -58,7 +58,7 @@ export function usePreviewLayers(): { display: DisplayImage | null; maskUrl: str
       cancelled = true;
       clearTimeout(t);
     };
-  }, [enabled, mask, image, threshold, softness, useExt]);
+  }, [enabled, mask, image, blob, threshold, softness, useExt, refine]);
   const maskUrl = useObjectUrl(enabled ? maskBlob : null);
 
   const display: DisplayImage | null =
