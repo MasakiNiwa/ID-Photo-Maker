@@ -1,0 +1,60 @@
+/* デザイントークン。色・余白・角丸はここだけで定義する。 */
+:root {
+  color-scheme: light;
+  --bg: #f4f5f6;
+  --surface: #ffffff;
+  --surface-2: #eef0f2;
+  --surface-3: #e3e6e9;
+  --border: #dcdfe3;
+  --text: #1e2226;
+  --text-muted: #5f666e;
+  --text-faint: #8b9198;
+  --accent: #3d6d93;
+  --accent-hover: #335d7e;
+  --accent-soft: #e2ecf4;
+  --on-accent: #ffffff;
+  --danger: #b4483f;
+  --danger-soft: #f7e5e3;
+  --warn: #9a6b17;
+  --warn-soft: #f6eedc;
+  --ok: #3f7a55;
+  --stage: #d9dce0;
+  --dim: rgb(30 34 38 / 0.55);
+  --guide: rgb(61 109 147 / 0.9);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.06);
+
+  --radius-s: 8px;
+  --radius: 12px;
+  --radius-l: 18px;
+  --header-h: 56px;
+  --nav-h: 64px;
+  --rail-w: 88px;
+  --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ダークモード: 彩度とコントラストを抑えた、徹底的に落ち着いた配色 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #131518;
+  --surface: #1a1d21;
+  --surface-2: #202429;
+  --surface-3: #282d33;
+  --border: #2c3137;
+  --text: #cfd3d8;
+  --text-muted: #8c939b;
+  --text-faint: #646b73;
+  --accent: #7f9cb4;
+  --accent-hover: #93adc2;
+  --accent-soft: #232c35;
+  --on-accent: #12161a;
+  --danger: #c07d76;
+  --danger-soft: #2e2222;
+  --warn: #bfa16e;
+  --warn-soft: #2b271f;
+  --ok: #86ad92;
+  --stage: #0f1113;
+  --dim: rgb(10 11 13 / 0.68);
+  --guide: rgb(127 156 180 / 0.85);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}

@@ -1,0 +1,134 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-columns: 1fr;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+  padding-top: env(safe-area-inset-top);
+  height: calc(var(--header-h) + env(safe-area-inset-top));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  view-transition-name: header;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+.brand-text {
+  display: grid;
+  line-height: 1.1;
+}
+.brand-name {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+}
+.header-actions {
+  display: flex;
+  gap: 2px;
+}
+.icon-btn.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.app-main {
+  view-transition-name: page;
+  padding: 16px 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/* ===== ナビゲーション（スマホ: 下部バー） ===== */
+.app-nav {
+  position: fixed;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  view-transition-name: nav;
+}
+.nav-item {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+.nav-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 15px;
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s;
+}
+.nav-item.active {
+  color: var(--text);
+}
+.nav-item.active .nav-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ===== PC: 左のナビゲーションレール ===== */
+@media (min-width: 900px) {
+  .shell {
+    grid-template-columns: var(--rail-w) 1fr;
+  }
+  .app-header {
+    grid-column: 1 / -1;
+  }
+  .app-nav {
+    position: sticky;
+    top: calc(var(--header-h) + env(safe-area-inset-top));
+    height: calc(100dvh - var(--header-h));
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 16px 0;
+    border-top: none;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    backdrop-filter: none;
+  }
+  .nav-item {
+    flex: 0 0 auto;
+    padding: 6px 0;
+  }
+  .app-main {
+    padding: 24px 32px 48px;
+  }
+}
