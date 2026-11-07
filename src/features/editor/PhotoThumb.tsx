@@ -1,11 +1,11 @@
 import type { CropState } from '@/domain/edit';
 import type { PhotoSpec } from '@/domain/specs';
 import { COLOR_FILTER_ID } from './ColorFilter';
-import { maskStyle } from './useMaskUrl';
+import { type DisplayImage, maskStyle } from './useMaskUrl';
 
 /** 構図の縮小プレビュー（Cropper と同じ座標系を CSS で再現） */
 export function PhotoThumb({
-  imageUrl,
+  display,
   imageAspect,
   spec,
   crop,
@@ -13,7 +13,7 @@ export function PhotoThumb({
   height = 64,
   maskUrl = null,
 }: {
-  imageUrl: string | null;
+  display: DisplayImage | null;
   imageAspect: number;
   spec: PhotoSpec;
   crop: CropState | undefined;
@@ -24,13 +24,13 @@ export function PhotoThumb({
   const w = (height * spec.widthMm) / spec.heightMm;
   return (
     <div className="thumb" style={{ width: w, height, background }}>
-      {imageUrl && crop && (
+      {display && crop && (
         <img
-          src={imageUrl}
+          src={display.url}
           alt=""
           style={{
-            width: crop.scale * height * imageAspect,
-            height: crop.scale * height,
+            width: crop.scale * height * imageAspect * (1 + 2 * display.fx),
+            height: crop.scale * height * (1 + 2 * display.fy),
             filter: `url(#${COLOR_FILTER_ID})`,
             ...maskStyle(maskUrl),
             transform: `translate(-50%, -50%) translate(${crop.x * height}px, ${crop.y * height}px) rotate(${crop.rotation}deg) scaleX(${crop.flipH ? -1 : 1})`,

@@ -1,9 +1,11 @@
 /// <reference lib="webworker" />
 import * as Comlink from 'comlink';
+import { extendFractions } from '@/domain/coverage';
 import { setJpegDpi } from '@/domain/jpeg';
 import { mmToPx, mmToPxRound } from '@/domain/units';
 import { adjustmentsToMatrix, applyMatrix, isIdentity } from './colorMatrix';
-import { buildMaskCanvas, type MaskInput, type MaskParams } from './mask';
+import { buildExtended, type Extended } from './extend';
+import { buildMaskCanvas, type MaskInput, type MaskParams, padMask } from './mask';
 import { drawBase, drawPattern, drawTexts } from './sheetBackground';
 import type { CalibrationSheetRequest, PhotoRenderRequest, SheetRenderRequest } from './types';
 
@@ -27,19 +29,70 @@ function decode(key: string, blob: Blob): Promise<ImageBitmap> {
 }
 
 // 元画像サイズ（最大1600px）の境界調整済みマスクをキャッシュ
-const masks = new Map<string, OffscreenCanvas>();
+interface PlacedLayer {
+  canvas: OffscreenCanvas;
+  /** 元画像に対する外周ののばし量の比率（のばしていなければ 0） */
+  fx: number;
+  fy: number;
+}
+const masks = new Map<string, PlacedLayer>();
 const MASK_MAX = 1600;
 
-function maskFor(key: string, m: MaskInput, p: MaskParams, imgW: number, imgH: number): OffscreenCanvas {
-  const id = `${key}:${p.threshold}:${p.softness}`;
-  let c = masks.get(id);
-  if (!c) {
-    const k = Math.min(1, MASK_MAX / Math.max(imgW, imgH));
-    c = buildMaskCanvas(m, p, Math.round(imgW * k), Math.round(imgH * k));
+function maskFor(
+  key: string,
+  m: MaskInput,
+  p: MaskParams,
+  imgW: number,
+  imgH: number,
+  extend: boolean,
+): PlacedLayer {
+  const id = `${key}:${p.threshold}:${p.softness}:${extend}`;
+  let layer = masks.get(id);
+  if (!layer) {
+    let src = m;
+    let fx = 0;
+    let fy = 0;
+    if (extend) {
+      const e = extendFractions(imgW, imgH);
+      ({ mask: src, fx, fy } = padMask(m, e.fx, e.fy));
+    }
+    const k = Math.min(1, MASK_MAX / Math.max(imgW * (1 + 2 * fx), imgH * (1 + 2 * fy)));
+    const canvas = buildMaskCanvas(
+      src,
+      p,
+      Math.round(imgW * (1 + 2 * fx) * k),
+      Math.round(imgH * (1 + 2 * fy) * k),
+    );
+    layer = { canvas, fx, fy };
     if (masks.size > 3) masks.clear();
-    masks.set(id, c);
+    masks.set(id, layer);
   }
-  return c;
+  return layer;
+}
+
+// 外周をのばした画像のキャッシュ（描画用・プレビュー用）
+const extended = new Map<string, Extended>();
+
+function extendedFor(key: string, img: ImageBitmap, maxContent: number, mask?: MaskInput | null): Extended {
+  const id = `${key}:${maxContent}:${mask ? 'm' : ''}`;
+  let e = extended.get(id);
+  if (!e) {
+    e = buildExtended(img, maxContent, mask);
+    if (extended.size > 3) extended.clear();
+    extended.set(id, e);
+  }
+  return e;
+}
+
+/** 元画像に対する比率 fx/fy だけ外側に広がったレイヤーを、元画像の位置に合わせて描く */
+function drawLayer(c: OffscreenCanvasRenderingContext2D, l: PlacedLayer, drawW: number, drawH: number) {
+  c.drawImage(
+    l.canvas,
+    -drawW / 2 - drawW * l.fx,
+    -drawH / 2 - drawH * l.fy,
+    drawW * (1 + 2 * l.fx),
+    drawH * (1 + 2 * l.fy),
+  );
 }
 
 function ctx2d(canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2D {
@@ -70,12 +123,16 @@ async function drawPhoto(req: PhotoRenderRequest): Promise<OffscreenCanvas> {
   c.translate(W / 2 + crop.x * H, H / 2 + crop.y * H);
   c.rotate((crop.rotation * Math.PI) / 180);
   c.scale(crop.flipH ? -1 : 1, 1);
+  if (req.extend) {
+    // 枠からはみ出した部分を、端をのばした画像で補う（元画像はその上に高画質で重ねる）
+    drawLayer(c, extendedFor(req.sourceKey, img, 1024, req.personMask), drawW, drawH);
+  }
   c.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
   if (req.mask) {
     // 人物だけを残す（同じ変換でマスクを重ねる）
-    const mc = maskFor(req.mask.key, req.mask.data, req.mask.params, img.width, img.height);
+    const ml = maskFor(req.mask.key, req.mask.data, req.mask.params, img.width, img.height, !!req.extend);
     c.globalCompositeOperation = 'destination-in';
-    c.drawImage(mc, -drawW / 2, -drawH / 2, drawW, drawH);
+    drawLayer(c, ml, drawW, drawH);
     c.globalCompositeOperation = 'source-over';
   }
   c.restore();
@@ -96,11 +153,40 @@ async function drawPhoto(req: PhotoRenderRequest): Promise<OffscreenCanvas> {
 const MAX_SOURCE_PX = 4096;
 
 const api = {
-  /** プレビュー用のマスク画像（PNG、CSS の mask-image に使う） */
-  async maskPreview(m: MaskInput, p: MaskParams, imgW: number, imgH: number): Promise<Blob> {
-    const k = Math.min(1, 900 / Math.max(imgW, imgH));
-    const c = buildMaskCanvas(m, p, Math.round(imgW * k), Math.round(imgH * k));
-    return c.convertToBlob({ type: 'image/png' });
+  /** プレビュー用のマスク画像（PNG、CSS の mask-image に使う）。extend 時は外周ものばす */
+  async maskPreview(
+    m: MaskInput,
+    p: MaskParams,
+    imgW: number,
+    imgH: number,
+    extend: boolean,
+  ): Promise<{ blob: Blob; fx: number; fy: number }> {
+    let src = m;
+    let fx = 0;
+    let fy = 0;
+    if (extend) {
+      const e = extendFractions(imgW, imgH);
+      ({ mask: src, fx, fy } = padMask(m, e.fx, e.fy));
+    }
+    const k = Math.min(1, 900 / Math.max(imgW * (1 + 2 * fx), imgH * (1 + 2 * fy)));
+    const c = buildMaskCanvas(
+      src,
+      p,
+      Math.round(imgW * (1 + 2 * fx) * k),
+      Math.round(imgH * (1 + 2 * fy) * k),
+    );
+    return { blob: await c.convertToBlob({ type: 'image/png' }), fx, fy };
+  },
+
+  /** プレビュー用の、外周をのばした画像 */
+  async extendedPreview(
+    source: Blob,
+    key: string,
+    mask: MaskInput | null,
+  ): Promise<{ blob: Blob; fx: number; fy: number }> {
+    const img = await decode(key, source);
+    const e = extendedFor(key, img, 1600, mask);
+    return { blob: await e.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 }), fx: e.fx, fy: e.fy };
   },
 
   /** 読み込んだ画像の向きを正規化し、大きすぎる場合は縮小する（デコードも裏側で行う） */

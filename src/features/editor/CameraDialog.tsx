@@ -21,6 +21,7 @@ export function CameraDialog({
   const [timer, setTimer] = useState(false);
   const [count, setCount] = useState(0);
   const [ready, setReady] = useState(false);
+  const [aspect, setAspect] = useState(4 / 3);
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +43,7 @@ export function CameraDialog({
         if (v) {
           v.srcObject = stream;
           await v.play();
+          if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
           setReady(true);
         }
         lock = await navigator.wakeLock?.request('screen').catch(() => undefined);
@@ -98,20 +100,30 @@ export function CameraDialog({
         <Dialog.Content className="camera">
           <Dialog.Title className="visually-hidden">カメラで撮影</Dialog.Title>
           <Dialog.Description className="visually-hidden">
-            顔をガイドの楕円に合わせて撮影してください
+            証明写真の枠に頭から胸元までが入るように撮影してください
           </Dialog.Description>
           <div className="camera-view">
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              style={{ transform: facing === 'user' ? 'scaleX(-1)' : undefined }}
-            />
-            {ready && <div className="camera-guide" aria-hidden />}
-            {count > 0 && <div className="camera-count">{count}</div>}
+            <div
+              className="camera-stage"
+              style={{ aspectRatio: String(aspect), ['--cam-aspect' as string]: aspect }}
+            >
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                style={{ transform: facing === 'user' ? 'scaleX(-1)' : undefined }}
+              />
+              {ready && (
+                // 証明写真（縦長）の枠と、頭の位置の目安。枠の外に余白が残るので、あとで規格に合わせやすい
+                <div className="camera-frame" aria-hidden>
+                  <div className="camera-head" />
+                </div>
+              )}
+              {count > 0 && <div className="camera-count">{count}</div>}
+            </div>
           </div>
           <p className="camera-hint">
-            顔を楕円に合わせ、正面を向いて撮影してください。明るく影の少ない場所がおすすめです。
+            顔を楕円に、頭から胸元までを枠の中に入れて、正面を向いて撮影してください。明るく影の少ない場所がおすすめです。
           </p>
           <div className="camera-bar">
             <Dialog.Close asChild>

@@ -336,19 +336,40 @@
   overflow: hidden;
   display: grid;
   place-items: center;
+  container-type: size;
 }
-.camera-view video {
+.camera-stage {
+  position: relative;
+  /* 映像と同じ縦横比で、表示領域に収まる最大サイズ */
+  width: min(100cqw, calc(100cqh * var(--cam-aspect)));
+  container-type: size;
+}
+.camera-stage video {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
-.camera-guide {
+.camera-frame {
   position: absolute;
-  width: min(46vw, 34vh);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: min(82cqh, calc(88cqw * 4 / 3));
   aspect-ratio: 3 / 4;
-  border: 2px dashed rgb(255 255 255 / 0.7);
+  border: 2px solid rgb(255 255 255 / 0.85);
+  border-radius: 6px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.4);
+}
+.camera-head {
+  position: absolute;
+  left: 50%;
+  top: 9%;
+  transform: translateX(-50%);
+  width: 56%;
+  height: 62%;
+  border: 2px dashed rgb(255 255 255 / 0.75);
   border-radius: 50%;
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.35);
 }
 .camera-count {
   position: absolute;

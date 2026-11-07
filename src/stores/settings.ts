@@ -24,6 +24,8 @@ export interface SettingsState {
   autoFit: boolean;
   /** AI の推論に GPU を使う */
   useGpu: boolean;
+  /** 枠からはみ出した部分を、写真の端をのばして補う */
+  extendEdges: boolean;
 }
 
 export const DEFAULT_CALIBRATION: Calibration = {
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   sheetDesign: DEFAULT_SHEET_DESIGN,
   autoFit: true,
   useGpu: true,
+  extendEdges: true,
 };
 
 interface SettingsActions {

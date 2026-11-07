@@ -81,3 +81,30 @@ export function buildMaskCanvas(m: MaskInput, p: MaskParams, outW: number, outH:
   oc.putImageData(d, 0, 0);
   return out;
 }
+
+/**
+ * マスクの外周を端の値で延長する（写真の端をのばして補うときに使う）。
+ * 戻り値の fx / fy は、元のマスク幅・高さに対する実際ののばし量の比率。
+ */
+export function padMask(
+  m: MaskInput,
+  fx: number,
+  fy: number,
+  /** 上側は背景（0）として延長する（頭の上に髪がのびないように） */
+  topAsBackground = true,
+): { mask: MaskInput; fx: number; fy: number } {
+  const px = Math.round(fx * m.width);
+  const py = Math.round(fy * m.height);
+  const w = m.width + px * 2;
+  const h = m.height + py * 2;
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(m.height - 1, Math.max(0, y - py));
+    if (topAsBackground && y < py) continue;
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(m.width - 1, Math.max(0, x - px));
+      data[y * w + x] = m.data[sy * m.width + sx] ?? 0;
+    }
+  }
+  return { mask: { width: w, height: h, data }, fx: px / m.width, fy: py / m.height };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alphaLut, blurMask, smoothstep } from './mask';
+import { alphaLut, blurMask, padMask, smoothstep } from './mask';
 
 describe('mask', () => {
   it('smoothstep の端と中央', () => {
@@ -15,6 +15,20 @@ describe('mask', () => {
     expect(b[3 * 8 + 7]).toBe(255);
     expect(b[3 * 8 + 3] ?? 0).toBeGreaterThan(0);
     expect(b[3 * 8 + 4] ?? 0).toBeLessThan(255);
+  });
+  it('padMask は端の値で延長する', () => {
+    const data = new Uint8Array([10, 20, 30, 40]);
+    const r = padMask({ width: 2, height: 2, data }, 0.5, 1);
+    expect(r.mask.width).toBe(4);
+    expect(r.mask.height).toBe(6);
+    expect(r.fx).toBe(0.5);
+    expect(r.mask.data[0]).toBe(0);
+    expect(r.mask.data[2 * 4]).toBe(10);
+    expect(r.mask.data[r.mask.data.length - 1]).toBe(40);
+  });
+  it('topAsBackground=false なら上も端の値で延長する', () => {
+    const r = padMask({ width: 2, height: 2, data: new Uint8Array([10, 20, 30, 40]) }, 0.5, 1, false);
+    expect(r.mask.data[0]).toBe(10);
   });
   it('しきい値を上げると同じ値でも透明寄りになる', () => {
     const lo = alphaLut({ threshold: 0.4, softness: 0.1 });
