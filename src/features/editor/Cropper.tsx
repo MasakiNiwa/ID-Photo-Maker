@@ -3,6 +3,7 @@ import type { CropState } from '@/domain/edit';
 import type { PhotoSpec } from '@/domain/specs';
 import { clamp } from '@/domain/units';
 import { COLOR_FILTER_ID } from './ColorFilter';
+import { maskStyle } from './useMaskUrl';
 
 export const SCALE_MIN = 0.2;
 export const SCALE_MAX = 8;
@@ -14,6 +15,8 @@ interface Props {
   crop: CropState;
   background: string;
   showGuides: boolean;
+  /** 背景を置き換えるときの人物マスク（プレビュー用） */
+  maskUrl?: string | null;
   onChange: (patch: Partial<CropState>) => void;
 }
 
@@ -33,7 +36,16 @@ export function zoomAt(crop: CropState, k: number, p: Pt): Partial<CropState> {
  * 写真の位置合わせ。ドラッグで移動、ピンチ/ホイールで拡大縮小、矢印キーでも操作できる。
  * 描画は CSS transform のみ（GPU合成）で、実際の切り抜きは出力時に Worker で行う。
  */
-export function Cropper({ imageUrl, imageAspect, spec, crop, background, showGuides, onChange }: Props) {
+export function Cropper({
+  imageUrl,
+  imageAspect,
+  spec,
+  crop,
+  background,
+  showGuides,
+  maskUrl,
+  onChange,
+}: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const pointers = useRef(new Map<number, Pt>());
@@ -166,6 +178,7 @@ export function Cropper({ imageUrl, imageAspect, spec, crop, background, showGui
               width: imgW,
               height: imgH,
               filter: `url(#${COLOR_FILTER_ID})`,
+              ...maskStyle(maskUrl ?? null),
               transform: `translate(-50%, -50%) translate(${crop.x * frameH}px, ${crop.y * frameH}px) rotate(${crop.rotation}deg) scaleX(${crop.flipH ? -1 : 1})`,
             }}
           />

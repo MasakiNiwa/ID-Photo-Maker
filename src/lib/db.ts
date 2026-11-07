@@ -15,14 +15,24 @@ export interface ImageRow {
   createdAt: number;
 }
 
+/** 人物マスク（AI の推論結果、低解像度） */
+export interface MaskRow {
+  imageId: string;
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+
 class AppDB extends Dexie {
   kv!: EntityTable<KvRow, 'key'>;
   images!: EntityTable<ImageRow, 'id'>;
+  masks!: EntityTable<MaskRow, 'imageId'>;
 
   constructor() {
     super('id-photo-maker');
     // スキーマ変更時は version を上げて upgrade を追加する
     this.version(1).stores({ kv: 'key', images: 'id, createdAt' });
+    this.version(2).stores({ masks: 'imageId' });
   }
 }
 

@@ -10,6 +10,14 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
   version: string;
 };
 
+const mediapipeVersion = (
+  JSON.parse(
+    readFileSync(new URL('./node_modules/@mediapipe/tasks-vision/package.json', import.meta.url), 'utf8'),
+  ) as {
+    version: string;
+  }
+).version;
+
 function commitHash(): string {
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
   try {
@@ -26,6 +34,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
     __COMMIT_HASH__: JSON.stringify(commitHash()),
+    __MEDIAPIPE_VERSION__: JSON.stringify(mediapipeVersion),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -55,6 +64,26 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,txt,webmanifest}'],
+        // AI の WASM・モデルは大きいので事前キャッシュせず、初回利用時にキャッシュする
+        globIgnores: ['mediapipe/**'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/mediapipe/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'mediapipe-wasm', expiration: { maxEntries: 4 } },
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.origin === 'https://storage.googleapis.com' &&
+              url.pathname.startsWith('/mediapipe-models/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mediapipe-models',
+              expiration: { maxEntries: 8 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

@@ -13,12 +13,13 @@ import { useObjectUrl } from '@/lib/useObjectUrl';
 import { renderSheet, type SheetPhotoRequests } from '@/render/pool';
 import type { SheetDecoration } from '@/render/sheetBackground';
 import type { CutLineStyle } from '@/render/types';
-import { useProject } from '@/stores/project';
+import { maskRequest, useProject } from '@/stores/project';
 import { useSettings } from '@/stores/settings';
 import { findSpec, useAllSpecs } from '@/stores/specs';
 import { ColorFilterDefs } from '../editor/ColorFilter';
 import { PhotoThumb } from '../editor/PhotoThumb';
 import { SpecPicker } from '../editor/SpecPicker';
+import { useMaskUrl } from '../editor/useMaskUrl';
 import { exportPdf } from './pdf';
 import { SheetDesignPanel } from './SheetDesignPanel';
 import './print.css';
@@ -39,6 +40,7 @@ export function PrintPage() {
   const s = useSettings();
   const specs = useAllSpecs();
   const imageUrl = useObjectUrl(p.imageBlob);
+  const maskUrl = useMaskUrl();
   const [adding, setAdding] = useState(false);
   const [panel, setPanel] = useState<'layout' | 'design'>('layout');
   const [busy, setBusy] = useState<false | 'jpeg' | 'pdf' | 'share'>(false);
@@ -129,6 +131,7 @@ export function PrintPage() {
         adjustments: p.adjustments,
         background: p.background,
         dpi,
+        mask: maskRequest(p),
       };
     }
     return reqs;
@@ -178,6 +181,8 @@ export function PrintPage() {
     p.crops,
     p.adjustments,
     p.background,
+    p.mask,
+    p.bgRemoval,
     result,
     s.calibration,
     s.cutLine,
@@ -323,6 +328,7 @@ export function PrintPage() {
                         spec={spec}
                         crop={p.crops[spec.id]}
                         background={p.background}
+                        maskUrl={maskUrl}
                         height={52}
                       />
                       <div className="item-text">

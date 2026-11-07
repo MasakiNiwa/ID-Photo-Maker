@@ -7,6 +7,9 @@
   構図は「枠の高さ = 1」の正規化座標なので、規格や出力解像度が変わっても同じ構図を保てる。
 - **プレビューと出力の一致**: 色調整は 4×5 カラーマトリクス（`src/render/colorMatrix.ts`）に変換し、
   プレビューは SVG `feColorMatrix`（GPU）、出力は Worker の画素処理で同じ行列を使う。
+- **AI 処理**（`src/ai`）: MediaPipe の顔検出（Face Landmarker）と人物セグメンテーション（Selfie Segmenter）を専用 Worker で実行（GPU 優先、失敗時は CPU）。
+  WASM は `scripts/copy-mediapipe.mjs` がバージョン付きパスに自前ホストし、モデルは初回利用時に取得して Service Worker でキャッシュする。
+  顔の特徴点から構図を求める計算（`src/domain/face.ts`）は純粋関数でテスト済み。
 - **並列描画**: `src/render/pool.ts` が Web Worker（OffscreenCanvas）のプールを管理し、サイズの異なる写真を並列に描画してから面付けする。
 
 ## ディレクトリ
