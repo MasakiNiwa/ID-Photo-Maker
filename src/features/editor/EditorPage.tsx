@@ -343,6 +343,20 @@ export function EditorPage() {
               )}
               {p.bgRemoval.enabled && (
                 <>
+                  <label className="switch-row">
+                    <span>
+                      境界を精密にする
+                      <span className="hint">
+                        写真の色を手がかりに、髪の毛などの境界をくっきり切り抜きます
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="switch"
+                      checked={p.bgRemoval.refine}
+                      onChange={(e) => p.setBgRemoval({ refine: e.target.checked })}
+                    />
+                  </label>
                   <Slider
                     label="境界の位置（右へ動かすと人物が小さく）"
                     value={p.bgRemoval.threshold}

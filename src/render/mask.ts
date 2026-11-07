@@ -55,14 +55,21 @@ export function blurMask(m: MaskInput, radius = 1, passes = 2): Uint8Array {
 }
 
 /** 指定サイズのアルファマスクを OffscreenCanvas に描く（RGB は白） */
-export function buildMaskCanvas(m: MaskInput, p: MaskParams, outW: number, outH: number): OffscreenCanvas {
+export function buildMaskCanvas(
+  m: MaskInput,
+  p: MaskParams,
+  outW: number,
+  outH: number,
+  /** 低解像度マスクの段差をぼかす（精密化済みのマスクでは不要） */
+  blur = true,
+): OffscreenCanvas {
   const src = new OffscreenCanvas(m.width, m.height);
   const sc = src.getContext('2d');
   const out = new OffscreenCanvas(outW, outH);
   const oc = out.getContext('2d', { willReadFrequently: true });
   if (!sc || !oc) throw new Error('Canvas 2D が使用できません');
   const img = sc.createImageData(m.width, m.height);
-  const data = blurMask(m);
+  const data = blur ? blurMask(m) : m.data;
   for (let i = 0; i < data.length; i++) {
     const j = i * 4;
     img.data[j] = 255;

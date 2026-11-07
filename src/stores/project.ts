@@ -34,9 +34,11 @@ export interface BgRemoval {
   threshold: number;
   /** 境界のぼかし */
   softness: number;
+  /** 元画像の色を手がかりに境界を精密にする（髪の毛など） */
+  refine: boolean;
 }
 
-export const DEFAULT_BG_REMOVAL: BgRemoval = { enabled: false, threshold: 0.5, softness: 0.12 };
+export const DEFAULT_BG_REMOVAL: BgRemoval = { enabled: false, threshold: 0.5, softness: 0.1, refine: true };
 
 interface ProjectState {
   image: ImageMeta | null;
@@ -289,5 +291,6 @@ export function maskRequest(s: Pick<ProjectState, 'mask' | 'bgRemoval' | 'image'
     data: s.mask,
     params: { threshold: s.bgRemoval.threshold, softness: s.bgRemoval.softness },
     key: s.image.id,
+    refine: s.bgRemoval.refine,
   };
 }

@@ -6,6 +6,7 @@ import { mmToPx, mmToPxRound } from '@/domain/units';
 import { adjustmentsToMatrix, applyMatrix, isIdentity } from './colorMatrix';
 import { buildExtended, type Extended } from './extend';
 import { buildMaskCanvas, type MaskInput, type MaskParams, padMask } from './mask';
+import { refineMask } from './refine';
 import { drawBase, drawPattern, drawTexts } from './sheetBackground';
 import type { CalibrationSheetRequest, PhotoRenderRequest, SheetRenderRequest } from './types';
 
@@ -38,31 +39,42 @@ interface PlacedLayer {
 const masks = new Map<string, PlacedLayer>();
 const MASK_MAX = 1600;
 
+// 精密化したマスク（元画像ごと）
+const refined = new Map<string, MaskInput>();
+
+function sourceMask(key: string, m: MaskInput, img: ImageBitmap, refine: boolean): MaskInput {
+  if (!refine) return m;
+  let r = refined.get(key);
+  if (!r) {
+    r = refineMask(img, m);
+    if (refined.size > 2) refined.clear();
+    refined.set(key, r);
+  }
+  return r;
+}
+
 function maskFor(
   key: string,
   m: MaskInput,
   p: MaskParams,
-  imgW: number,
-  imgH: number,
+  img: ImageBitmap,
   extend: boolean,
+  refine: boolean,
 ): PlacedLayer {
-  const id = `${key}:${p.threshold}:${p.softness}:${extend}`;
+  const id = `${key}:${p.threshold}:${p.softness}:${extend}:${refine}`;
   let layer = masks.get(id);
   if (!layer) {
-    let src = m;
+    let src = sourceMask(key, m, img, refine);
     let fx = 0;
     let fy = 0;
     if (extend) {
-      const e = extendFractions(imgW, imgH);
-      ({ mask: src, fx, fy } = padMask(m, e.fx, e.fy));
+      const e = extendFractions(img.width, img.height);
+      ({ mask: src, fx, fy } = padMask(src, e.fx, e.fy));
     }
-    const k = Math.min(1, MASK_MAX / Math.max(imgW * (1 + 2 * fx), imgH * (1 + 2 * fy)));
-    const canvas = buildMaskCanvas(
-      src,
-      p,
-      Math.round(imgW * (1 + 2 * fx) * k),
-      Math.round(imgH * (1 + 2 * fy) * k),
-    );
+    const ow = img.width * (1 + 2 * fx);
+    const oh = img.height * (1 + 2 * fy);
+    const k = Math.min(1, MASK_MAX / Math.max(ow, oh));
+    const canvas = buildMaskCanvas(src, p, Math.round(ow * k), Math.round(oh * k), !refine);
     layer = { canvas, fx, fy };
     if (masks.size > 3) masks.clear();
     masks.set(id, layer);
@@ -130,7 +142,7 @@ async function drawPhoto(req: PhotoRenderRequest): Promise<OffscreenCanvas> {
   c.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
   if (req.mask) {
     // 人物だけを残す（同じ変換でマスクを重ねる）
-    const ml = maskFor(req.mask.key, req.mask.data, req.mask.params, img.width, img.height, !!req.extend);
+    const ml = maskFor(req.mask.key, req.mask.data, req.mask.params, img, !!req.extend, !!req.mask.refine);
     c.globalCompositeOperation = 'destination-in';
     drawLayer(c, ml, drawW, drawH);
     c.globalCompositeOperation = 'source-over';
@@ -155,26 +167,25 @@ const MAX_SOURCE_PX = 4096;
 const api = {
   /** プレビュー用のマスク画像（PNG、CSS の mask-image に使う）。extend 時は外周ものばす */
   async maskPreview(
+    source: Blob,
+    key: string,
     m: MaskInput,
     p: MaskParams,
-    imgW: number,
-    imgH: number,
     extend: boolean,
+    refine: boolean,
   ): Promise<{ blob: Blob; fx: number; fy: number }> {
-    let src = m;
+    const img = await decode(key, source);
+    let src = sourceMask(key, m, img, refine);
     let fx = 0;
     let fy = 0;
     if (extend) {
-      const e = extendFractions(imgW, imgH);
-      ({ mask: src, fx, fy } = padMask(m, e.fx, e.fy));
+      const e = extendFractions(img.width, img.height);
+      ({ mask: src, fx, fy } = padMask(src, e.fx, e.fy));
     }
-    const k = Math.min(1, 900 / Math.max(imgW * (1 + 2 * fx), imgH * (1 + 2 * fy)));
-    const c = buildMaskCanvas(
-      src,
-      p,
-      Math.round(imgW * (1 + 2 * fx) * k),
-      Math.round(imgH * (1 + 2 * fy) * k),
-    );
+    const ow = img.width * (1 + 2 * fx);
+    const oh = img.height * (1 + 2 * fy);
+    const k = Math.min(1, 1000 / Math.max(ow, oh));
+    const c = buildMaskCanvas(src, p, Math.round(ow * k), Math.round(oh * k), !refine);
     return { blob: await c.convertToBlob({ type: 'image/png' }), fx, fy };
   },
 
