@@ -19,6 +19,8 @@ export interface LayoutOptions {
   gapMm: number;
   /** 配置ブロックを用紙中央に寄せる */
   center: boolean;
+  /** 縦方向の寄せ（既定: center に従う）。top で下側に空きを作る */
+  valign?: 'center' | 'top';
 }
 
 export interface Placement {
@@ -51,7 +53,7 @@ const EPS = 1e-6;
  */
 export function computeLayout(items: readonly LayoutItem[], opt: LayoutOptions): LayoutResult {
   const rows = shelfLayout(items, opt);
-  if (rows.overflowTotal === 0 && items.length <= 1) return rows;
+  if (rows.overflowTotal === 0 && items.length <= 1) return align(rows, opt);
   const transposed = shelfLayout(
     items.map((i) => ({ ...i, widthMm: i.heightMm, heightMm: i.widthMm })),
     { ...opt, sheetWidthMm: opt.sheetHeightMm, sheetHeightMm: opt.sheetWidthMm },
@@ -66,7 +68,19 @@ export function computeLayout(items: readonly LayoutItem[], opt: LayoutOptions):
       heightMm: p.widthMm,
     })),
   };
-  return cols.overflowTotal < rows.overflowTotal ? cols : rows;
+  return align(cols.overflowTotal < rows.overflowTotal ? cols : rows, opt);
+}
+
+/** 配置ブロック全体を中央（または上寄せ）に移動する */
+function align(r: LayoutResult, opt: LayoutOptions): LayoutResult {
+  if (!opt.center || r.placements.length === 0) return r;
+  const minX = Math.min(...r.placements.map((p) => p.xMm));
+  const maxX = Math.max(...r.placements.map((p) => p.xMm + p.widthMm));
+  const minY = Math.min(...r.placements.map((p) => p.yMm));
+  const maxY = Math.max(...r.placements.map((p) => p.yMm + p.heightMm));
+  const dx = (opt.sheetWidthMm - (maxX - minX)) / 2 - minX;
+  const dy = opt.valign === 'top' ? opt.marginMm - minY : (opt.sheetHeightMm - (maxY - minY)) / 2 - minY;
+  return { ...r, placements: r.placements.map((p) => ({ ...p, xMm: p.xMm + dx, yMm: p.yMm + dy })) };
 }
 
 function shelfLayout(items: readonly LayoutItem[], opt: LayoutOptions): LayoutResult {
@@ -116,16 +130,9 @@ function shelfLayout(items: readonly LayoutItem[], opt: LayoutOptions): LayoutRe
   }
 
   const placements = shelves.flatMap((s) => s.items);
-  let offX = opt.marginMm;
-  let offY = opt.marginMm;
-  if (opt.center && placements.length) {
-    const usedW = Math.max(...shelves.map((s) => s.cursorX));
-    offX += (areaW - usedW) / 2;
-    offY += (areaH - nextY) / 2;
-  }
   for (const p of placements) {
-    p.xMm += offX;
-    p.yMm += offY;
+    p.xMm += opt.marginMm;
+    p.yMm += opt.marginMm;
   }
   return { placements, overflow, overflowTotal };
 }

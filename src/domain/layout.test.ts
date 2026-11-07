@@ -69,6 +69,13 @@ describe('computeLayout', () => {
   });
 });
 
+describe('valign', () => {
+  it('上寄せでは上の余白が margin になる', () => {
+    const r = computeLayout([{ key: 'a', widthMm: 30, heightMm: 40, count: 2 }], { ...L, valign: 'top' });
+    expect(Math.min(...r.placements.map((p) => p.yMm))).toBeCloseTo(2);
+  });
+});
+
 describe('maxAdditional', () => {
   it('空きを埋められる最大枚数を返す', () => {
     const items = [{ key: 'a', widthMm: 30, heightMm: 40, count: 2 }];

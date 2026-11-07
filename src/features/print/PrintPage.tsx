@@ -6,10 +6,12 @@ import { NumberField, Segmented, Stepper } from '@/components/controls';
 import { toast } from '@/components/toast';
 import { computeLayout, type LayoutItem, type LayoutOptions, maxAdditional } from '@/domain/layout';
 import { findPaper, orient, PAPERS } from '@/domain/paper';
+import { buildCaptionLines, captionHeight, placeCaption, textColorFor } from '@/domain/sheetDesign';
 import { formatSize, type PhotoSpec } from '@/domain/specs';
 import { canShareFiles, downloadBlob, safeFilename, shareBlob } from '@/lib/download';
 import { useObjectUrl } from '@/lib/useObjectUrl';
 import { renderSheet, type SheetPhotoRequests } from '@/render/pool';
+import type { SheetDecoration } from '@/render/sheetBackground';
 import type { CutLineStyle } from '@/render/types';
 import { useProject } from '@/stores/project';
 import { useSettings } from '@/stores/settings';
@@ -18,6 +20,7 @@ import { ColorFilterDefs } from '../editor/ColorFilter';
 import { PhotoThumb } from '../editor/PhotoThumb';
 import { SpecPicker } from '../editor/SpecPicker';
 import { exportPdf } from './pdf';
+import { SheetDesignPanel } from './SheetDesignPanel';
 import './print.css';
 
 const CUT_LINES: { value: CutLineStyle; label: string }[] = [
@@ -37,6 +40,7 @@ export function PrintPage() {
   const specs = useAllSpecs();
   const imageUrl = useObjectUrl(p.imageBlob);
   const [adding, setAdding] = useState(false);
+  const [panel, setPanel] = useState<'layout' | 'design'>('layout');
   const [busy, setBusy] = useState<false | 'jpeg' | 'pdf' | 'share'>(false);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -44,17 +48,6 @@ export function PrintPage() {
 
   const paper = findPaper(s.paperId);
   const sheet = orient(paper, s.landscape);
-  const opt: LayoutOptions = useMemo(
-    () => ({
-      sheetWidthMm: sheet.widthMm,
-      sheetHeightMm: sheet.heightMm,
-      marginMm: s.marginMm,
-      gapMm: s.gapMm,
-      center: true,
-    }),
-    [sheet.widthMm, sheet.heightMm, s.marginMm, s.gapMm],
-  );
-
   const entries = useMemo(
     () =>
       p.layout
@@ -62,6 +55,26 @@ export function PrintPage() {
         .filter((x): x is { entry: typeof x.entry; spec: PhotoSpec } => !!x.spec),
     [p.layout, specs],
   );
+  // 空きスペースに入れる文字（文字があるときは用紙下部にその分の場所を確保する）
+  const design = s.sheetDesign;
+  const sizeRows = useMemo(
+    () => entries.map(({ entry, spec }) => ({ ...spec, count: entry.count })),
+    [entries],
+  );
+  const reserveMm = captionHeight(buildCaptionLines(design, sizeRows, new Date()));
+
+  const opt: LayoutOptions = useMemo(
+    () => ({
+      sheetWidthMm: sheet.widthMm,
+      sheetHeightMm: sheet.heightMm - reserveMm,
+      marginMm: s.marginMm,
+      gapMm: s.gapMm,
+      center: true,
+      valign: s.sheetDesign.valign,
+    }),
+    [sheet.widthMm, sheet.heightMm, reserveMm, s.marginMm, s.gapMm, s.sheetDesign.valign],
+  );
+
   const items: LayoutItem[] = useMemo(
     () =>
       entries.map(({ entry, spec }) => ({
@@ -73,6 +86,24 @@ export function PrintPage() {
     [entries],
   );
   const result = useMemo(() => computeLayout(items, opt), [items, opt]);
+
+  // 空きスペースのデザイン（文字の位置は配置結果から決める）
+  const decoration: SheetDecoration & { captionFits: boolean } = useMemo(() => {
+    // サイズ一覧は実際に配置できた枚数で表記する
+    const placed = sizeRows.map((r) => ({ ...r, count: r.count - (result.overflow[r.id] ?? 0) }));
+    const lines = buildCaptionLines(design, placed, new Date());
+    const texts = placeCaption(lines, result.placements, sheet, s.marginMm, s.gapMm);
+    return {
+      baseColor: design.baseColor,
+      accentColor: design.accentColor,
+      pattern: design.pattern,
+      gradient: design.gradient,
+      photoMat: design.photoMat,
+      texts: texts ?? [],
+      textColor: textColorFor(design.baseColor),
+      captionFits: texts !== null,
+    };
+  }, [design, sizeRows, result, sheet, s.marginMm, s.gapMm]);
 
   // 印刷レイアウトに入っている規格の構図を用意する
   const activeSpec = findSpec(specs, p.activeSpecId);
@@ -114,6 +145,8 @@ export function PrintPage() {
       calibration: s.calibration,
       cutLine: s.cutLine,
       quality,
+      gapMm: s.gapMm,
+      decoration,
     });
   };
 
@@ -148,6 +181,7 @@ export function PrintPage() {
     result,
     s.calibration,
     s.cutLine,
+    decoration,
     sheet.widthMm,
     sheet.heightMm,
   ]);
@@ -202,7 +236,7 @@ export function PrintPage() {
           {previewUrl && result.placements.length > 0 ? (
             <img src={previewUrl} alt={`${paper.name}の印刷プレビュー`} />
           ) : (
-            <svg viewBox={`0 0 ${sheet.widthMm} ${sheet.heightMm}`} aria-hidden>
+            <svg className="sheet-placeholder" viewBox={`0 0 ${sheet.widthMm} ${sheet.heightMm}`} aria-hidden>
               {result.placements.map((pl, i) => (
                 <rect
                   // biome-ignore lint/suspicious/noArrayIndexKey: 配置の順序が識別子
@@ -224,146 +258,163 @@ export function PrintPage() {
       </section>
 
       <aside className="print-panel">
-        <div className="card print-block">
-          <h2 className="block-title">用紙</h2>
-          <div className="paper-grid">
-            {PAPERS.map((pp) => (
-              <button
-                key={pp.id}
-                type="button"
-                className="paper-option"
-                aria-pressed={pp.id === paper.id}
-                onClick={() => s.set({ paperId: pp.id })}
-              >
-                <span className="paper-name">{pp.name}</span>
-                <span className="paper-size">
-                  {pp.widthMm}×{pp.heightMm}
-                </span>
-              </button>
-            ))}
-          </div>
-          <Segmented
-            label="用紙の向き"
-            value={s.landscape}
-            options={[
-              { value: false, label: '縦' },
-              { value: true, label: '横' },
-            ]}
-            onChange={(v) => s.set({ landscape: v })}
-          />
-          {paper.note && <p className="hint">{paper.note}</p>}
-        </div>
-
-        <div className="card print-block">
-          <div className="block-head">
-            <h2 className="block-title">並べる写真</h2>
-            <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
-              <Plus size={16} /> 追加
-            </button>
-          </div>
-          {entries.length === 0 && (
-            <p className="hint">
-              「追加」から規格を選ぶと、用紙に並べられます。サイズの違う写真も組み合わせられます。
-            </p>
-          )}
-          <ul className="item-list">
-            {entries.map(({ entry, spec }) => {
-              const room = maxAdditional(items, spec.id, opt);
-              const over = result.overflow[spec.id] ?? 0;
-              return (
-                <li key={spec.id} className="item">
-                  <PhotoThumb
-                    imageUrl={imageUrl}
-                    imageAspect={p.image ? p.image.width / p.image.height : 1}
-                    spec={spec}
-                    crop={p.crops[spec.id]}
-                    background={p.background}
-                    height={52}
-                  />
-                  <div className="item-text">
-                    <span className="item-name">{spec.name}</span>
-                    <span className="item-size">
-                      {formatSize(spec)}
-                      {over > 0 ? (
-                        <span className="item-over"> ・{over}枚はみ出し</span>
-                      ) : room > 0 ? (
-                        ` ・あと${room}枚入ります`
-                      ) : (
-                        ' ・満杯'
-                      )}
+        <Segmented
+          label="印刷メニュー"
+          value={panel}
+          options={[
+            { value: 'layout', label: 'レイアウト' },
+            { value: 'design', label: 'デザイン' },
+          ]}
+          onChange={setPanel}
+        />
+        {panel === 'layout' ? (
+          <>
+            <div className="card print-block">
+              <h2 className="block-title">用紙</h2>
+              <div className="paper-grid">
+                {PAPERS.map((pp) => (
+                  <button
+                    key={pp.id}
+                    type="button"
+                    className="paper-option"
+                    aria-pressed={pp.id === paper.id}
+                    onClick={() => s.set({ paperId: pp.id })}
+                  >
+                    <span className="paper-name">{pp.name}</span>
+                    <span className="paper-size">
+                      {pp.widthMm}×{pp.heightMm}
                     </span>
-                  </div>
-                  <div className="item-actions">
-                    <Stepper
-                      label={`${spec.name}の枚数`}
-                      value={entry.count}
-                      min={1}
-                      onChange={(v) => p.setLayoutCount(spec.id, v)}
-                    />
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="空きを埋める"
-                      aria-label={`${spec.name}で空きを埋める`}
-                      disabled={room === 0}
-                      onClick={() => p.setLayoutCount(spec.id, entry.count + room)}
-                    >
-                      <Maximize2 size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="削除"
-                      aria-label={`${spec.name}を削除`}
-                      onClick={() => p.removeFromLayout(spec.id)}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {result.overflowTotal > 0 && (
-            <p className="notice notice-warn row">
-              <AlertTriangle size={16} /> {result.overflowTotal}
-              枚が用紙に入りきりません。枚数・用紙・余白を調整してください。
-            </p>
-          )}
-          <p className="hint">構図は「作成」画面で規格ごとに調整できます。</p>
-        </div>
+                  </button>
+                ))}
+              </div>
+              <Segmented
+                label="用紙の向き"
+                value={s.landscape}
+                options={[
+                  { value: false, label: '縦' },
+                  { value: true, label: '横' },
+                ]}
+                onChange={(v) => s.set({ landscape: v })}
+              />
+              {paper.note && <p className="hint">{paper.note}</p>}
+            </div>
 
-        <div className="card print-block">
-          <h2 className="block-title">余白とカット線</h2>
-          <div className="grid-2">
-            <NumberField
-              label="用紙の余白"
-              unit="mm"
-              value={s.marginMm}
-              min={0}
-              max={30}
-              step={0.5}
-              onChange={(v) => s.set({ marginMm: Math.max(0, v) })}
-            />
-            <NumberField
-              label="写真の間隔"
-              unit="mm"
-              value={s.gapMm}
-              min={0}
-              max={20}
-              step={0.5}
-              onChange={(v) => s.set({ gapMm: Math.max(0, v) })}
-            />
+            <div className="card print-block">
+              <div className="block-head">
+                <h2 className="block-title">並べる写真</h2>
+                <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
+                  <Plus size={16} /> 追加
+                </button>
+              </div>
+              {entries.length === 0 && (
+                <p className="hint">
+                  「追加」から規格を選ぶと、用紙に並べられます。サイズの違う写真も組み合わせられます。
+                </p>
+              )}
+              <ul className="item-list">
+                {entries.map(({ entry, spec }) => {
+                  const room = maxAdditional(items, spec.id, opt);
+                  const over = result.overflow[spec.id] ?? 0;
+                  return (
+                    <li key={spec.id} className="item">
+                      <PhotoThumb
+                        imageUrl={imageUrl}
+                        imageAspect={p.image ? p.image.width / p.image.height : 1}
+                        spec={spec}
+                        crop={p.crops[spec.id]}
+                        background={p.background}
+                        height={52}
+                      />
+                      <div className="item-text">
+                        <span className="item-name">{spec.name}</span>
+                        <span className="item-size">
+                          {formatSize(spec)}
+                          {over > 0 ? (
+                            <span className="item-over"> ・{over}枚はみ出し</span>
+                          ) : room > 0 ? (
+                            ` ・あと${room}枚入ります`
+                          ) : (
+                            ' ・満杯'
+                          )}
+                        </span>
+                      </div>
+                      <div className="item-actions">
+                        <Stepper
+                          label={`${spec.name}の枚数`}
+                          value={entry.count}
+                          min={1}
+                          onChange={(v) => p.setLayoutCount(spec.id, v)}
+                        />
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="空きを埋める"
+                          aria-label={`${spec.name}で空きを埋める`}
+                          disabled={room === 0}
+                          onClick={() => p.setLayoutCount(spec.id, entry.count + room)}
+                        >
+                          <Maximize2 size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="削除"
+                          aria-label={`${spec.name}を削除`}
+                          onClick={() => p.removeFromLayout(spec.id)}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {result.overflowTotal > 0 && (
+                <p className="notice notice-warn row">
+                  <AlertTriangle size={16} /> {result.overflowTotal}
+                  枚が用紙に入りきりません。枚数・用紙・余白を調整してください。
+                </p>
+              )}
+              <p className="hint">構図は「作成」画面で規格ごとに調整できます。</p>
+            </div>
+
+            <div className="card print-block">
+              <h2 className="block-title">余白とカット線</h2>
+              <div className="grid-2">
+                <NumberField
+                  label="用紙の余白"
+                  unit="mm"
+                  value={s.marginMm}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  onChange={(v) => s.set({ marginMm: Math.max(0, v) })}
+                />
+                <NumberField
+                  label="写真の間隔"
+                  unit="mm"
+                  value={s.gapMm}
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  onChange={(v) => s.set({ gapMm: Math.max(0, v) })}
+                />
+              </div>
+              <Segmented
+                label="カット線"
+                value={s.cutLine}
+                options={CUT_LINES}
+                onChange={(v) => s.set({ cutLine: v })}
+              />
+              <p className="hint">印刷のズレや倍率の補正は「設定 → 印刷のズレ補正」で行えます。</p>
+            </div>
+          </>
+        ) : (
+          <div className="card print-block">
+            <h2 className="block-title">用紙のデザイン</h2>
+            <SheetDesignPanel captionFits={decoration.captionFits} overflow={result.overflowTotal} />
           </div>
-          <Segmented
-            label="カット線"
-            value={s.cutLine}
-            options={CUT_LINES}
-            onChange={(v) => s.set({ cutLine: v })}
-          />
-          <p className="hint">印刷のズレや倍率の補正は「設定 → 印刷のズレ補正」で行えます。</p>
-        </div>
-
+        )}
         <div className="card print-block">
           <h2 className="block-title">書き出し</h2>
           <button

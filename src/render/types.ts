@@ -1,5 +1,6 @@
 import type { Adjustments, CropState } from '@/domain/edit';
 import type { Placement } from '@/domain/layout';
+import type { SheetDecoration } from './sheetBackground';
 
 export interface PhotoRenderRequest {
   /** 元画像。Blob は構造化複製されても中身はコピーされない */
@@ -34,6 +35,9 @@ export interface SheetRenderRequest {
   calibration: Calibration;
   cutLine: CutLineStyle;
   quality: number;
+  /** 写真の間隔（白い台紙の幅を決める） */
+  gapMm: number;
+  decoration: SheetDecoration;
 }
 
 export interface CalibrationSheetRequest {
