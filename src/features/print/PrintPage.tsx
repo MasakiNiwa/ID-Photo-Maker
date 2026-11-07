@@ -19,7 +19,7 @@ import { findSpec, useAllSpecs } from '@/stores/specs';
 import { ColorFilterDefs } from '../editor/ColorFilter';
 import { PhotoThumb } from '../editor/PhotoThumb';
 import { SpecPicker } from '../editor/SpecPicker';
-import { useMaskUrl } from '../editor/useMaskUrl';
+import { usePreviewLayers } from '../editor/useMaskUrl';
 import { exportPdf } from './pdf';
 import { SheetDesignPanel } from './SheetDesignPanel';
 import './print.css';
@@ -39,8 +39,7 @@ export function PrintPage() {
   const p = useProject();
   const s = useSettings();
   const specs = useAllSpecs();
-  const imageUrl = useObjectUrl(p.imageBlob);
-  const maskUrl = useMaskUrl();
+  const { display, maskUrl } = usePreviewLayers();
   const [adding, setAdding] = useState(false);
   const [panel, setPanel] = useState<'layout' | 'design'>('layout');
   const [busy, setBusy] = useState<false | 'jpeg' | 'pdf' | 'share'>(false);
@@ -132,6 +131,8 @@ export function PrintPage() {
         background: p.background,
         dpi,
         mask: maskRequest(p),
+        extend: s.extendEdges,
+        personMask: p.mask,
       };
     }
     return reqs;
@@ -183,6 +184,7 @@ export function PrintPage() {
     p.background,
     p.mask,
     p.bgRemoval,
+    s.extendEdges,
     result,
     s.calibration,
     s.cutLine,
@@ -323,7 +325,7 @@ export function PrintPage() {
                   return (
                     <li key={spec.id} className="item">
                       <PhotoThumb
-                        imageUrl={imageUrl}
+                        display={display}
                         imageAspect={p.image ? p.image.width / p.image.height : 1}
                         spec={spec}
                         crop={p.crops[spec.id]}

@@ -16,10 +16,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ConfirmDialog, Segmented, Slider } from '@/components/controls';
 import { toast } from '@/components/toast';
+import { frameCoverage } from '@/domain/coverage';
 import { BACKGROUND_COLORS, DEFAULT_ADJUSTMENTS } from '@/domain/edit';
 import { formatSize, type PhotoSpec, PRESET_SPECS } from '@/domain/specs';
 import { canShareFiles, downloadBlob, safeFilename, shareBlob } from '@/lib/download';
-import { useObjectUrl } from '@/lib/useObjectUrl';
 import { renderPhotoJpeg } from '@/render/pool';
 import { maskRequest, useProject } from '@/stores/project';
 import { useSettings } from '@/stores/settings';
@@ -28,7 +28,7 @@ import { ColorFilterDefs } from './ColorFilter';
 import { Cropper, SCALE_MAX, SCALE_MIN } from './Cropper';
 import { ImageDropzone, useFilePicker, useImagePaste } from './ImageInput';
 import { SpecPicker } from './SpecPicker';
-import { useMaskUrl } from './useMaskUrl';
+import { usePreviewLayers } from './useMaskUrl';
 import './editor.css';
 
 type Tab = 'spec' | 'position' | 'color' | 'export';
@@ -48,8 +48,7 @@ export function EditorPage() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('spec');
   const [confirmClear, setConfirmClear] = useState(false);
-  const imageUrl = useObjectUrl(p.imageBlob);
-  const maskUrl = useMaskUrl();
+  const { display, maskUrl } = usePreviewLayers();
   const ai = p.analysis.status;
 
   const spec: PhotoSpec = findSpec(specs, p.activeSpecId) ?? (PRESET_SPECS[0] as PhotoSpec);
@@ -80,6 +79,16 @@ export function EditorPage() {
     [spec.id],
   );
 
+  const coverage = useMemo(
+    () => (crop && p.image ? frameCoverage(crop, p.image, spec) : null),
+    [crop, p.image, spec],
+  );
+  const missing = coverage
+    ? [coverage.top && '上', coverage.bottom && '下', (coverage.left || coverage.right) && '左右']
+        .filter(Boolean)
+        .join('・')
+    : '';
+
   const baseRotation = crop ? Math.round(crop.rotation / 90) * 90 : 0;
   const fineRotation = crop ? crop.rotation - baseRotation : 0;
 
@@ -101,6 +110,8 @@ export function EditorPage() {
         background: p.background,
         dpi: settings.dpi,
         mask: maskRequest(p),
+        extend: settings.extendEdges,
+        personMask: p.mask,
       },
       settings.jpegQuality,
     );
@@ -136,10 +147,10 @@ export function EditorPage() {
     });
   };
 
-  if (!p.image || !imageUrl || !crop) {
+  if (!p.image || !display || !crop) {
     return (
       <div className="editor-empty">
-        {p.image && !imageUrl ? (
+        {p.image && !display ? (
           <div className="loading">
             <Loader2 className="spin" /> 読み込み中…
           </div>
@@ -174,7 +185,7 @@ export function EditorPage() {
           </div>
         </div>
         <Cropper
-          imageUrl={imageUrl}
+          display={display}
           imageAspect={imageAspect}
           spec={spec}
           crop={crop}
@@ -195,6 +206,13 @@ export function EditorPage() {
                 </button>
               </>
             )}
+          </p>
+        )}
+        {coverage && !coverage.covered && (
+          <p className={`ai-status ${settings.extendEdges ? '' : 'ai-noface'}`} role="status">
+            {settings.extendEdges
+              ? `写真が枠の${missing}に足りないため、端をのばして補っています。不自然なときは少し離れて撮り直してください。`
+              : `写真が枠の${missing}に足りません。少し離れて撮り直すか、「位置」タブで「はみ出した部分を補う」をオンにしてください。`}
           </p>
         )}
         <div className="editor-quick" role="toolbar" aria-label="写真の操作">
@@ -286,6 +304,18 @@ export function EditorPage() {
                 onChange={(v) => updateCrop({ rotation: baseRotation + v })}
                 format={(v) => `${v.toFixed(1)}°`}
               />
+              <label className="switch-row">
+                <span>
+                  はみ出した部分を補う
+                  <span className="hint">枠が写真からはみ出したとき、写真の端をのばして自然に埋めます</span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={settings.extendEdges}
+                  onChange={(e) => settings.set({ extendEdges: e.target.checked })}
+                />
+              </label>
               <p className="hint">
                 写真をドラッグして移動、ピンチやマウスホイールで拡大縮小できます。キーボードの矢印キーで微調整もできます。
               </p>

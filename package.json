@@ -1,7 +1,7 @@
 {
   "name": "id-photo-maker",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "証明写真 ID Photo Maker — コンビニ印刷や自宅印刷用の証明写真データを作るWebアプリ",
   "license": "MIT",
   "type": "module",

@@ -16,6 +16,10 @@ export interface PhotoRenderRequest {
   dpi: number;
   /** 背景の置き換え（人物マスク）。無ければ元画像の背景のまま */
   mask?: { data: MaskInput; params: MaskParams; key: string };
+  /** 枠からはみ出した部分を、写真の端をのばして補う */
+  extend?: boolean;
+  /** 端をのばすときに人物と背景を見分けるためのマスク（背景の置き換えとは独立） */
+  personMask?: MaskInput | null;
 }
 
 export interface Calibration {

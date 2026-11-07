@@ -3,13 +3,14 @@ import type { CropState } from '@/domain/edit';
 import type { PhotoSpec } from '@/domain/specs';
 import { clamp } from '@/domain/units';
 import { COLOR_FILTER_ID } from './ColorFilter';
-import { maskStyle } from './useMaskUrl';
+import { type DisplayImage, maskStyle } from './useMaskUrl';
 
 export const SCALE_MIN = 0.2;
 export const SCALE_MAX = 8;
 
 interface Props {
-  imageUrl: string;
+  /** 表示する画像（外周をのばした画像の場合は fx/fy にのばし量） */
+  display: DisplayImage;
   imageAspect: number;
   spec: PhotoSpec;
   crop: CropState;
@@ -37,7 +38,7 @@ export function zoomAt(crop: CropState, k: number, p: Pt): Partial<CropState> {
  * 描画は CSS transform のみ（GPU合成）で、実際の切り抜きは出力時に Worker で行う。
  */
 export function Cropper({
-  imageUrl,
+  display,
   imageAspect,
   spec,
   crop,
@@ -171,12 +172,12 @@ export function Cropper({
           <div className="cropper-bg" style={{ width: frameW, height: frameH, background }} />
           <img
             className="cropper-img"
-            src={imageUrl}
+            src={display.url}
             alt=""
             draggable={false}
             style={{
-              width: imgW,
-              height: imgH,
+              width: imgW * (1 + 2 * display.fx),
+              height: imgH * (1 + 2 * display.fy),
               filter: `url(#${COLOR_FILTER_ID})`,
               ...maskStyle(maskUrl ?? null),
               transform: `translate(-50%, -50%) translate(${crop.x * frameH}px, ${crop.y * frameH}px) rotate(${crop.rotation}deg) scaleX(${crop.flipH ? -1 : 1})`,

@@ -24,8 +24,12 @@ export function normalizeImage(blob: Blob) {
   return next().normalizeImage(blob);
 }
 
-export function maskPreview(...args: Parameters<RenderWorkerApi['maskPreview']>): Promise<Blob> {
+export function maskPreview(...args: Parameters<RenderWorkerApi['maskPreview']>) {
   return next().maskPreview(...args);
+}
+
+export function extendedPreview(...args: Parameters<RenderWorkerApi['extendedPreview']>) {
+  return next().extendedPreview(...args);
 }
 
 export function renderPhotoJpeg(req: PhotoRenderRequest, quality: number): Promise<Blob> {
