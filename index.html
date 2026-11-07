@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="コンビニ印刷や自宅印刷用の証明写真データを作るアプリ。写真は端末内だけで処理されます。" />
+    <meta name="theme-color" content="#f4f5f6" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <title>証明写真 ID Photo Maker</title>
+    <script>
+      // 描画前にテーマを決めて、ちらつきを防ぐ
+      (() => {
+        try {
+          const t = localStorage.getItem('theme-hint');
+          const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

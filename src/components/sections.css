@@ -1,0 +1,89 @@
+.sections {
+  display: grid;
+  gap: 10px;
+}
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.section h2 {
+  font-size: inherit;
+}
+.section-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 700;
+}
+.section-trigger:hover {
+  background: var(--surface-2);
+}
+.section-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex: none;
+}
+.section-title {
+  flex: 1;
+  display: grid;
+}
+.section-summary {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.section-chevron {
+  color: var(--text-faint);
+  transition: transform 0.25s var(--ease);
+  flex: none;
+}
+.section-trigger[data-state="open"] .section-chevron {
+  transform: rotate(180deg);
+}
+.section-content {
+  overflow: hidden;
+}
+.section-content[data-state="open"] {
+  animation: section-open 0.25s var(--ease);
+}
+.section-content[data-state="closed"] {
+  animation: section-close 0.2s var(--ease);
+}
+.section-body {
+  padding: 4px 16px 18px;
+  display: grid;
+  gap: 14px;
+}
+@keyframes section-open {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes section-close {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
